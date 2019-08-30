@@ -1,0 +1,31 @@
+{
+  "name": "addressvalidation",
+  "version": "1.0.0",
+  "description": "NodeJS Electron Address Validation using Google Maps Geocode API",
+  "main": "app.js",
+  "scripts": {
+    "start": "electron .",
+    "package-win": "electron-packager . \"Address Validation\" --overwrite --asar=true --platform=win32 --arch=ia32 --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"Address Validation\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulberry96/AddressValidation.git"
+  },
+  "author": "Paul Berry",
+  "license": "ISC",
+  "dependencies": {
+    "bootstrap": "^4.1.1",
+    "electron": "^2.0.1",
+    "jquery": "^3.3.1",
+    "papaparse": "^4.6.2",
+    "popper.js": "^1.14.6"
+  },
+  "devDependencies": {
+    "electron-packager": "^12.1.0",
+    "electron-reload": "^1.2.2"
+  },
+  "bugs": {
+    "url": "https://github.com/paulberry96/AddressValidation/issues"
+  },
+  "homepage": "https://github.com/paulberry96/AddressValidation#readme"
+}
