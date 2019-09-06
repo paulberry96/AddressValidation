@@ -4,14 +4,71 @@
     <meta charset="UTF-8">
     <title>Address Validation</title>
     <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="./fonts/fontawesome/css/all.min.css">
+    <!-- <link rel="stylesheet" href="./fonts/fontawesome/css/all.min.css"> -->
     <link rel="stylesheet" href="./styles/main.css">
   </head>
   <body>
 
     <div class="page">
+      
+      <div class="sidebar">
+
+        <!-- START File Tabs -->
+        <ul class="nav nav-pills flex-column" id="fileTabList" role="tablist" aria-orientation="vertical">
+          <li class="nav-item">
+            <a class="nav-link active" id="home-tab" data-toggle="tab" href="#home" role="tab" aria-controls="home" aria-selected="true">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="profile-tab" data-toggle="tab" href="#profile" role="tab" aria-controls="profile" aria-selected="false">Profile</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="contact-tab" data-toggle="tab" href="#contact" role="tab" aria-controls="contact" aria-selected="false">Contact</a>
+          </li>
+        </ul>
+        <!-- END File Tabs -->
+
+      </div>
+
+      <div class="header">
+        
+        <!-- START Header Controls -->
+        <div class="header-controls">
+          <div class="main-control">
+              <button id="btnNew" class="btn btn-block btn-primary">NEW</button>
+          </div>
+        </div>
+        <!-- END Header Controls -->
+      </div>
+
+      <div class="content">
+
+        <!-- START File Tab Content -->
+        <div class="tab-content" id="fileTabContent">
+          <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">...</div>
+          <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">...</div>
+          <div class="tab-pane fade" id="contact" role="tabpanel" aria-labelledby="contact-tab">...</div>
+        </div>
+        <!-- END File Tab Content -->
+      </div>
 
     </div>
+
+    <!-- START Popup -->
+    <div class="popup" id="popup">
+      <div class="popup-content">
+        <div class="popup-panel">
+          <div class="popup-heading">
+            <div class="popup-title">Import as:</div>
+          </div>
+          <div class="popup-body"><input type="text" class="popup-input"></div>
+          <div class="popup-controls">
+            <button type="button" class="btn btn-secondary">Cancel</button>
+            <button type="button" class="btn btn-primary">Import</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END Popup -->
 
     <script src="./node_modules/jquery/dist/jquery.min.js"></script>
     <script>window.$ = window.jQuery = require('jquery');</script>

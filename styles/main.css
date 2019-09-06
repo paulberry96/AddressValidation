@@ -6,23 +6,133 @@ html, body {
     font-family:'Roboto', Arial, Helvetica, sans-serif;
     background: #ddd;
 }
+.page {
+    display:flex;
+    flex-direction: row;
+    width:100%;
+    height:100%;
+    padding:0px;
+}
 
+/* START Sidebar */
+.sidebar {
+    position:fixed;
+    top:70px; /* Height of header */
+    left:0;
+    flex: 0 0 auto;
+    width:250px;
+    height:100%;
+    background:#fafafa;
+    box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.1);
+}
+/* END Sidebar */
+
+/* START Header */
+.header {
+    position:fixed;
+    top:0;
+    left:0;
+    flex: 0 0 auto;
+    width:100%;
+    height:70px;
+    background:#fafafa;
+    /* box-shadow: 0px 0px 15px 1px rgba(0,0,0,0.1); */
+}
+.header-controls {
+    display:flex;
+    flex-direction: row;
+    width:100%;
+    height:100%;
+}
+.header-controls .main-control {
+    width: 250px;
+    height:100%;
+    padding:15px;
+    box-shadow:0px 0px 3px 1px rgba(0,0,0,0.15);
+}
+.header-controls .main-control .btn {
+    width: 220px;
+    height: 40px;
+}
+/* END Header */
+
+/* START Content */
+.content {
+    width:100%;
+    padding: 20px;
+    margin: 70px 0px 0px 250px;
+}
+/* END Content */
+
+/* START Popup */
+.popup {
+    position:absolute;
+    display:none;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.3);
+}
+.popup.shown {
+    display:flex;
+}
+.popup-content {
+    padding:25px 22px 15px 22px;
+    background:#fafafa;
+    text-align: center;
+    box-shadow:0px 0px 20px 0px rgba(0,0,0,0.3);
+    border-radius:3px;
+}
+.popup-heading {
+    user-select: none;
+    margin-bottom:10px;
+    cursor:default;
+}
+.popup-title {
+    font-size:20px;
+    color:#454545;
+}
+.popup-body {
+    margin-bottom:15px;
+}
+.popup-input {
+    width:250px;
+    height:32px;
+    border-radius:2px;
+    border:1px solid rgba(0,0,0,0.25);
+    padding:2px 6px;
+}
+.popup-controls {
+    display:flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    color:#fff;
+}
+.popup-controls .btn {
+    margin-left:10px;
+    padding:.250rem .75rem;
+}
+/* END Popup */
+
+/* START Misc */
 ul {
     list-style: none;
 }
 a {
     text-decoration: none !important;
 }
-
-.row {
-    margin:0;
+.nav-pills .nav-link {
+    border-radius: 0 !important;
 }
+/* END Misc */
 
-.page {
-    padding:20px;
-}
-
-/* @font-face {
-    src: url("../fonts/Roboto-Regular.ttf");
+/* START Fonts */
+@font-face {
+    src: url("../fonts/Roboto/Roboto-Regular.ttf");
     font-family:"Roboto";
-} */
+}
+/* END Fonts */

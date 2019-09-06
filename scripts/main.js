@@ -1,11 +1,15 @@
 const fs = require("fs");
+const path = require("path");
+const { dialog } = require('electron').remote
 const papaparse = require("papaparse");
 
 const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
-const IN_FILENAME = "Client Dump Test.csv";
-const OUT_FILENAME = "./output/output.csv";
-const ADDRESS_COLUMN_NAME = "Full Address";
-const REGION_BIAS = "AU";
+
+// const IN_FILENAME = "Client Dump Test.csv";
+// const OUT_FILENAME = "./output/output.csv";
+const DEFAULT_ADDRESS_COLUMN_NAME = "Full Address";
+const DEFAULT_REGION_BIAS = "AU";
+
 const MAX_QUERIES_PER_SECOND = 10; // As of Sep 2019, Google has a max QPS of 10 ??
 const MAX_QUERY_RETRIES = 3; // Number of times a single request will retry after failing
 const MAX_QUERY_TOTAL_RETRIES = 100; // Total number of retries for all combined requests (set to 0 for unlimited)
@@ -28,11 +32,11 @@ const addressColumns = {
     "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
-let base_url = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+REGION_BIAS+"&address=";
+let baseUrlApi = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+DEFAULT_REGION_BIAS+"&address=";
 
 let requests = []; // Gets populated with AJAX requests 
 let running = false;
-let queue = 0; 
+let queue = 0;
 let counter = 0; // Keeps track of how many requests are sent in total (for throttling)
 let qps = 0; // Current queries per second
 
@@ -40,7 +44,15 @@ let queryTotalRetries = 0;
 
 let output = [];
 
+let files = [];
+
+// Start here
 $(document).ready(function() {
+
+    // Set up button listeners etc.
+    setUpListeners();
+
+    return;
 
     // Get CSV Data
     let csvData = getCSV(IN_FILENAME);
@@ -60,13 +72,13 @@ $(document).ready(function() {
         let row = rows[i];
 
         // Get address string
-        let address = row[ADDRESS_COLUMN_NAME];
+        let address = row[DEFAULT_ADDRESS_COLUMN_NAME];
 
         // Skip if address is empty
         if(address.trim() == "") continue;
 
         // Construct url
-        let url = base_url + address;
+        let url = baseUrlApi + address;
 
         // Add request to array
         requests.push({ "request": function() { sendRequest(url, row); }, "numRequests": 0 });
@@ -76,6 +88,8 @@ $(document).ready(function() {
 
     // Get Initial start time
     let startTime = Date.now();
+
+    return;
 
     running = true;
     let mainInterval = setInterval(function() {
@@ -122,6 +136,91 @@ $(document).ready(function() {
         }
     }, 100);
 });
+
+function setUpListeners() {
+    $('#btnNew').on('click', function() {
+        filePicker().then(loadFile).then(addFile).catch(errorHandler);
+    });
+}
+
+/**
+ * Shows the Open File Dialog and returns a file path
+ *
+ * @returns {string} filePath - Path to the specified file
+ */
+function filePicker() {
+    return new Promise(function(resolve, reject) {
+        dialog.showOpenDialog({
+            title: "Select CSV File",
+            promptToCreate: true,
+            properties: ['openFile'],
+            filters: [
+                { name: 'CSV Files', extensions: ['csv'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        }, function(filePaths) {
+            if(filePaths && filePaths.length === 1)
+                resolve(filePaths[0]);
+            else
+                reject({ status: "OK", message: "showOpenDialog Cancelled." });
+        });
+    });
+}
+
+/**
+ * Reads and returns data from the specified file
+ *
+ * @param {string} filePath - Path to the file
+ * @returns {Object} file - The file
+ * @returns {string} file.name - Name of the file (without extension)
+ * @returns {Array} file.data - Contents of the file.
+ */
+function loadFile(filePath) {
+    return new Promise(function(resolve, reject) {
+        fs.readFile(filePath, function(err, fileData) {
+
+            if(err)
+                reject({ status: "ERROR", message: "ReadFile Error. Check console for details", details: err });
+
+            fileData = fileData.toString();
+
+            let csv = papaparse.parse(fileData, {
+                header: true,
+                delimiter: ",",
+                skipEmptyLines: true,
+                error: function(error, file) {
+                    reject({ status: "ERROR", message: "FileReader Error. Check console for details", details: { error: error, file: file } });
+                }
+            });
+
+            if(csv.errors && csv.errors.length > 0)
+                reject({ status: "ERROR", message: "CSV Parse Errors. Check console for details", details: csv.errors });
+
+            if(csv.data && csv.data.length > 0) {
+                let fileName = path.basename(filePath, path.extname(filePath));
+                let file = { name: fileName, data: csv.data };
+                resolve(file); // Return file data
+            }
+            else {
+                reject({ status: "ERROR", message: "Error: CSV Empty" });
+            }
+        });
+    });
+}
+
+function addFile(file) {
+    console.log(file.name);
+    console.log(file.data);
+
+    files.push(file);
+
+    updateFileList();
+}
+
+function updateFileList() {
+    let fileTabList = $('#fileTabList');
+    fileTabList.empty(); // Clear contents
+}
 
 // Returns CSV data as array
 function getCSV(filepath) {
@@ -197,5 +296,32 @@ function parseResults(row, results) {
     function getAddressComponent(result, type, nameType) {
         var component = result["address_components"].filter(function(v) { return v["types"].indexOf(type) > -1 });
         return component.length > 0 ? component[nameType] : "";
+    }
+}
+
+/**
+ * Alerts the user and prints out errors to the console
+ *
+ * @param {Object} error - Error object
+ * @param {string} error.status - The status of the error ("OK", "ERROR")
+ * @param {string} error.message - The message to be alerted to the user (in a popup box)
+ * @param {*} [error.details] - Any additional details of the error
+ *
+ */
+function errorHandler(error) {
+
+    if(!error) return;
+
+    if(error.status && error.status !== "OK") {
+        if(error.message && error.message.trim() !== "")
+            alert(error.message); // TODO - Make visual error banner
+        else
+            alert("An unknown error has occured.");
+
+        if(error.details && error.details.trim() !== "")
+            console.error(error.details);
+    }
+    else {
+        console.error("Unhandled error");
     }
 }
