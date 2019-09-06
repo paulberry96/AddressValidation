@@ -10,25 +10,6 @@
   <body>
 
     <div class="page">
-      
-      <div class="sidebar">
-
-        <!-- START File Tabs -->
-        <ul class="nav nav-pills flex-column" id="fileTabList" role="tablist" aria-orientation="vertical">
-          <li class="nav-item">
-            <a class="nav-link active" id="home-tab" data-toggle="tab" href="#home" role="tab" aria-controls="home" aria-selected="true">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" id="profile-tab" data-toggle="tab" href="#profile" role="tab" aria-controls="profile" aria-selected="false">Profile</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" id="contact-tab" data-toggle="tab" href="#contact" role="tab" aria-controls="contact" aria-selected="false">Contact</a>
-          </li>
-        </ul>
-        <!-- END File Tabs -->
-
-      </div>
-
       <div class="header">
         
         <!-- START Header Controls -->
@@ -41,14 +22,14 @@
       </div>
 
       <div class="content">
-
-        <!-- START File Tab Content -->
-        <div class="tab-content" id="fileTabContent">
-          <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">...</div>
-          <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">...</div>
-          <div class="tab-pane fade" id="contact" role="tabpanel" aria-labelledby="contact-tab">...</div>
+        <div class="file-list" id="fileList">
+          <div class="file-item">
+            <div class="file-info">
+              <div class="file-name">Test file</div>
+              <div class="file-row-count">3665</div>
+            </div>
+          </div>
         </div>
-        <!-- END File Tab Content -->
       </div>
 
     </div>
