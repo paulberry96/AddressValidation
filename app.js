@@ -14,9 +14,18 @@ let mainWindow;
 
 function createWindow () {
   // Create the browser window.
-  mainWindow = new BrowserWindow();
+  mainWindow = new BrowserWindow({
+    width: 800,
+    height: 400,
+    minWidth: 800,
+    minHeight: 400,
+    useContentSize: true,
+    frame: true,
+    resizable: true,
+    center: true,
+  });
 
-  mainWindow.maximize();
+  // mainWindow.maximize();
 
   // and load the index.html of the app.
   mainWindow.loadURL(url.format({

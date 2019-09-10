@@ -7,12 +7,18 @@ const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
 
 // const IN_FILENAME = "Client Dump Test.csv";
 // const OUT_FILENAME = "./output/output.csv";
+const DEFAULT_OUTPUT_PATH = "output\\";
+
 const DEFAULT_ADDRESS_COLUMN_NAME = "Full Address";
 const DEFAULT_REGION_BIAS = "AU";
 
 const MAX_QUERIES_PER_SECOND = 10; // As of Sep 2019, Google has a max QPS of 10 ??
 const MAX_QUERY_RETRIES = 3; // Number of times a single request will retry after failing
 const MAX_QUERY_TOTAL_RETRIES = 100; // Total number of retries for all combined requests (set to 0 for unlimited)
+
+// const addressQueryComponents = {
+//     "address": { column: "" }
+// };
 
 const addressColumns = {
     "Street Number": { type: "street_number", name_type: "short_name"},
@@ -34,112 +40,58 @@ const addressColumns = {
 
 let baseUrlApi = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+DEFAULT_REGION_BIAS+"&address=";
 
-let requests = []; // Gets populated with AJAX requests 
+let requests = []; // Gets populated with AJAX requests
 let running = false;
 let queue = 0;
-let counter = 0; // Keeps track of how many requests are sent in total (for throttling)
+let totalRequests = 0; // Total number of requests
+let requestCount = 0; // Keeps track of how many requests have been sent in total (for throttling)
 let qps = 0; // Current queries per second
+let startTime = null;
 
 let queryTotalRetries = 0;
 
+let input = null;
 let output = [];
-
-let files = [];
 
 // Start here
 $(document).ready(function() {
 
     // Set up button listeners etc.
     setUpListeners();
-
-    return;
-
-    // Get CSV Data
-    let csvData = getCSV(IN_FILENAME);
-
-    if(csvData.errors.length > 0) {
-        alert("Error Reading CSV. See console for details.");
-        console.error(csvData.errors);
-    }
-
-    // Rows in CSV
-    let rows = csvData.data;
-
-    // Populate requests to be sent
-    let i = rows.length;
-    while(i--) {
-
-        let row = rows[i];
-
-        // Get address string
-        let address = row[DEFAULT_ADDRESS_COLUMN_NAME];
-
-        // Skip if address is empty
-        if(address.trim() == "") continue;
-
-        // Construct url
-        let url = baseUrlApi + address;
-
-        // Add request to array
-        requests.push({ "request": function() { sendRequest(url, row); }, "numRequests": 0 });
-    }
-
-    queue = requests.length;
-
-    // Get Initial start time
-    let startTime = Date.now();
-
-    return;
-
-    running = true;
-    let mainInterval = setInterval(function() {
-
-        // If all requests are sent, stop
-        if(requests.length <= 0 || running === false)
-            clearInterval(mainInterval);
-
-        while(requests.length > 0) {
-
-            // Calculate elapsed time in seconds
-            var elapsedTime = (Date.now() - startTime) / 1000;
-
-            // Calculate queries per second (number of total operations divided by total elapsed time)
-            qps = counter / elapsedTime;
-
-            // If max limit exceeded, 
-            if(qps >= MAX_QUERIES_PER_SECOND)
-                break;
-
-            // Call Next Request
-            if(running) {
-
-                // Get next request and remove from array
-                var request = requests.pop();
-
-                // If this request has been sent before (is retrying)
-                // if(request["numRequests"] > 0) {
-                //     if(MAX_QUERY_TOTAL_RETRIES !== 0 && queryTotalRetries >= MAX_QUERY_TOTAL_RETRIES)
-                //         break;
-                //         if(request["numRequests"] >= MAX_QUERY_RETRIES) {
-                        
-                //         }
-                //     }
-                //     request["numRequests"]++;
-                //     queryTotalRetries++;
-                // }
-
-                request["numRequests"]++;
-                request["request"]();
-
-                counter++;
-            }
-        }
-    }, 100);
 });
 
 function setUpListeners() {
-    $('#btnNew').on('click', function() {
-        filePicker().then(loadFile).then(addFile).catch(errorHandler);
+
+    // Button - Browse
+    $('#btnBrowse').on('click', function() {
+        showFilePicker().then(loadFile).then(addFile).catch(errorHandler);
+    });
+
+    // Button - Start
+    $('#btnStart').on('click', start);
+
+    // Button - Remove
+    $('#btnRemove').on('click', function() {
+        
+        running = false;
+
+
+    });
+
+    // Button - Pause
+    $('#btnPause').on('click', function() {
+        
+        running = false;
+
+
+    });
+
+    // Button - Stop
+    $('#btnStop').on('click', function() {
+        
+        running = false;
+
+
     });
 }
 
@@ -148,7 +100,7 @@ function setUpListeners() {
  *
  * @returns {string} filePath - Path to the specified file
  */
-function filePicker() {
+function showFilePicker() {
     return new Promise(function(resolve, reject) {
         dialog.showOpenDialog({
             title: "Select CSV File",
@@ -177,6 +129,8 @@ function filePicker() {
  */
 function loadFile(filePath) {
     return new Promise(function(resolve, reject) {
+
+        // Read file
         fs.readFile(filePath, function(err, fileData) {
 
             if(err)
@@ -184,6 +138,7 @@ function loadFile(filePath) {
 
             fileData = fileData.toString();
 
+            // Parse CSV into array
             let csv = papaparse.parse(fileData, {
                 header: true,
                 delimiter: ",",
@@ -209,31 +164,99 @@ function loadFile(filePath) {
 }
 
 function addFile(file) {
-    console.log(file.name);
-    console.log(file.data);
 
-    files.push(file);
+    input = file;
 
-    updateFileList();
+    let rows = file.data;
+
+    requests = [];
+
+    // Populate requests to be sent
+    let i = rows.length;
+
+    while(i--) {
+
+        let row = rows[i];
+
+        // Get address string
+        let address = row[DEFAULT_ADDRESS_COLUMN_NAME];
+
+        // Skip if address is empty
+        if(address.trim() == "") continue;
+
+        // Construct url
+        let url = baseUrlApi + address;
+
+        let componentList = [];
+
+        // Add request to array
+        requests.push({ "request": function() { sendRequest(url, row); }, "numRequests": 0 });
+    }
+
+    queue = totalRequests = requests.length;
+
+    let fileEl = $('#file');
+    fileEl.find('.file-name').html(file.name);
+    fileEl.find('.file-progress-info').html(`${file.data.length} Records`);
+    fileEl.find('.progress-bar').css('width', '0%').attr('aria-valuenow', 0);
+    fileEl.addClass('shown');
 }
 
-function updateFileList() {
-    let fileTabList = $('#fileTabList');
-    fileTabList.empty(); // Clear contents
-}
+function start() {
 
-// Returns CSV data as array
-function getCSV(filepath) {
+    if(input === null) return;
 
-    const file = fs.readFileSync(filepath).toString();
+    $('#file').addClass('running');
 
-    var csv = papaparse.parse(file, {
-        header: true,
-        delimiter: ",",
-        skipEmptyLines: true
-    });
+    startTime = Date.now();
 
-    return csv;
+    running = true;
+
+    let mainInterval = setInterval(function() {
+
+        updateProgress();
+
+        // If all requests are sent or manually paused/stopped
+        if(requests.length <= 0 || running === false)
+            clearInterval(mainInterval);
+
+        // while there are requests left, fill the queue until limit is hit
+        while(requests.length > 0) {
+
+            // Calculate elapsed time in seconds
+            var elapsedTime = (Date.now() - startTime) / 1000;
+
+            // Calculate queries per second (number of total operations divided by total elapsed time)
+            qps = requestCount / elapsedTime;
+
+            // If max limit exceeded, wait and check again in the next interval
+            if(qps >= MAX_QUERIES_PER_SECOND)
+                break;
+
+            if(running) {
+
+                // Get next request and remove from array
+                var request = requests.pop();
+
+                // If this request has been sent before (is retrying)
+                // if(request["numRequests"] > 0) {
+                //     if(MAX_QUERY_TOTAL_RETRIES !== 0 && queryTotalRetries >= MAX_QUERY_TOTAL_RETRIES)
+                //         break;
+                //         if(request["numRequests"] >= MAX_QUERY_RETRIES) {
+                        
+                //         }
+                //     }
+                //     request["numRequests"]++;
+                //     queryTotalRetries++;
+                // }
+
+                request["numRequests"]++; // Increment counter for this request
+                request["request"](); // Call the request
+
+                requestCount++;
+            }
+        }
+    }, 100);
 }
 
 function sendRequest(url, row) {
@@ -245,9 +268,11 @@ function sendRequest(url, row) {
         console.error("REQUEST FAILED: ", url);
         // TODO: re-request - only request the same request a certain number of times (MAX_RETRIES) ?
     }).always(function() {
-        // If all responses have been received
-        if(--queue <= 0)
-            running = false;
+
+        queue--;
+
+        if(queue <= 0)
+            finished();
     });
 }
 
@@ -258,7 +283,7 @@ function parseResponse(response, row) {
                 parseResults(row, response.results);
                 break;
             default:
-                console.error("failed: ", response.results);
+                console.error("failed: ", response);
                 break;
         }
     }
@@ -269,35 +294,101 @@ function parseResponse(response, row) {
 
 function parseResults(row, results) {
 
+    console.log(results);
+
     // Get first result (best match)
-    let result = results[0]; // TODO: handle multiple results
+    for(let i = 0; i < results.length; i++) {
+    
+        let result = results[i];
 
-    // console.log("Appending: ", result, " to ", row);
+        let obj = {
+            "Input": row["Full Address"],
+            "Accuracy": result["geometry"]["location_type"],
+            "Partial": (result["partial_match"] === true) || false,
+            "Types": result["types"].join(",")
+        };
 
-    let obj = {
-        "Input": row["Full Address"],
-        "Accuracy": result["geometry"]["location_type"],
-        "Partial": result["partial_match"],
-        "Types": ",".join(result["types"])
-    };
+        for(let key in addressColumns) {
+            if(!addressColumns.hasOwnProperty(key))
+                continue;
 
-    for(let key in addressColumns) {
-        if(!addressColumns.hasOwnProperty(key))
-            continue;
+            var type = addressColumns[key]["type"];
+            var nameType = addressColumns[key]["name_type"];
 
-        var type = addressColumns[key]["type"];
-        var nameType = addressColumns[key]["nameType"];
+            obj[key] = getAddressComponent(result, type, nameType);
+        }
 
-        obj[key] = getAddressComponent(result, type, nameType);
+        output.push(obj);
     }
-
-    output.push(obj);
 
     function getAddressComponent(result, type, nameType) {
         var component = result["address_components"].filter(function(v) { return v["types"].indexOf(type) > -1 });
-        return component.length > 0 ? component[nameType] : "";
+        return component.length > 0 ? component[0][nameType] : "";
     }
 }
+
+function updateProgress() {
+
+    let percent = (requestCount / totalRequests) * 100;
+
+    $('#file').find('.progress-bar').css('width', percent + '%').attr('aria-valuenow', percent);
+    $('#file').find('.file-progress-info').html(`${requestCount} of ${totalRequests} records complete. ? Remaining`);
+}
+
+// Called when all requests have been sent/received
+function finished() {
+
+    console.log("---- FINISHED ----");
+
+    updateProgress();
+
+    $('#file').removeClass('running');
+
+    let fileName = input.name;
+
+    console.log(input);
+    console.log(fileName);
+
+    // Save File
+    showFileSaver(fileName).then(saveFile).catch(errorHandler);
+}
+
+function showFileSaver(fileName) {
+    return new Promise(function(resolve, reject) {
+        dialog.showSaveDialog({
+            title: "Save File",
+            defaultPath: DEFAULT_OUTPUT_PATH + fileName,
+            filters: [
+                { name: 'CSV Files', extensions: ['csv'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        }, function(filePath) {
+            if(filePath && filePath != null)
+                resolve(filePath);
+            else
+                reject({ status: "OK", message: "showSaveDialog Cancelled." });
+        });
+    });
+}
+
+function saveFile(filePath) {
+
+    let csv = papaparse.unparse(output);
+
+    return new Promise(function(resolve, reject) {
+        fs.writeFile(filePath, csv, function(err) {
+            if(err)
+                reject({ status: "ERROR", message: "SaveFile Error. Check console for details", details: err });
+        });
+    });
+}
+
+function encodeQueryData(data) {
+    const ret = [];
+    for(let d in data)
+        ret.push(encodeURIComponent(d) + '=' + encodeURIComponent(data[d]));
+    return ret.join('&');
+ }
 
 /**
  * Alerts the user and prints out errors to the console
@@ -320,8 +411,5 @@ function errorHandler(error) {
 
         if(error.details && error.details.trim() !== "")
             console.error(error.details);
-    }
-    else {
-        console.error("Unhandled error");
     }
 }

@@ -10,23 +10,38 @@
   <body>
 
     <div class="page">
+
       <div class="header">
-        
         <!-- START Header Controls -->
         <div class="header-controls">
           <div class="main-control">
-              <button id="btnNew" class="btn btn-block btn-primary">NEW</button>
+              <button id="btnBrowse" class="btn btn-block btn-default">Browse</button>
           </div>
         </div>
         <!-- END Header Controls -->
       </div>
 
       <div class="content">
-        <div class="file-list" id="fileList">
-          <div class="file-item">
-            <div class="file-info">
-              <div class="file-name">Test file</div>
-              <div class="file-row-count">3665</div>
+        <div id="file" class="file">
+          <div class="file-info">
+            <div class="file-name">Client Dump.csv</div>
+          </div>
+          <div class="file-progress">
+            <div class="progress">
+              <div class="progress-bar" role="progressbar" style="width: 50%" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+          </div>
+          <div class="file-bottom-section">
+            <div class="file-progress-info">250 of 6000 records complete. 12m 36s remaining.</div>
+            <div class="file-controls">
+              <div class="file-controls-stopped">
+                <button id="btnStart" class="btn btn-success">Start</button>
+                <button id="btnRemove" class="btn btn-danger">Remove</button>
+              </div>
+              <div class="file-controls-running">
+                <button id="btnPause" class="btn btn-secondary">Pause</button>
+                <button id="btnStop" class="btn btn-danger">Stop</button>
+              </div>
             </div>
           </div>
         </div>
