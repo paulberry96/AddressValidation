@@ -7,18 +7,21 @@ const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
 
 // const IN_FILENAME = "Client Dump Test.csv";
 // const OUT_FILENAME = "./output/output.csv";
-const DEFAULT_OUTPUT_PATH = "output\\";
+const DEFAULT_OUTPUT_PATH = "./output/";
 
-const DEFAULT_ADDRESS_COLUMN_NAME = "Full Address";
+const DEFAULT_ADDRESS_COLUMNS = ["Address1", "Address2"]; // Columns get concatenated with separator
+const DEFAULT_ADDRESS_COLUMN_SEPARATOR = " "; // Separator for address columns (if multiple columns)
 const DEFAULT_REGION_BIAS = "AU";
 
 const MAX_QUERIES_PER_SECOND = 10; // As of Sep 2019, Google has a max QPS of 10 ??
 const MAX_QUERY_RETRIES = 3; // Number of times a single request will retry after failing
 const MAX_QUERY_TOTAL_RETRIES = 100; // Total number of retries for all combined requests (set to 0 for unlimited)
 
-// const addressQueryComponents = {
-//     "address": { column: "" }
-// };
+const addressQueryComponents = {
+    "Country": "country",
+    "City": "locality",
+    "State": "administrative_area"
+};
 
 const addressColumns = {
     "Street Number": { type: "street_number", name_type: "short_name"},
@@ -38,7 +41,7 @@ const addressColumns = {
     "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
-let baseUrlApi = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+DEFAULT_REGION_BIAS+"&address=";
+let baseUrlApi = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+DEFAULT_REGION_BIAS;
 
 let requests = []; // Gets populated with AJAX requests
 let running = false;
@@ -64,7 +67,7 @@ function setUpListeners() {
 
     // Button - Browse
     $('#btnBrowse').on('click', function() {
-        showFilePicker().then(loadFile).then(addFile).catch(errorHandler);
+        showFilePicker().then(loadFile).then(prepareRequests).catch(errorHandler);
     });
 
     // Button - Start
@@ -153,7 +156,7 @@ function loadFile(filePath) {
 
             if(csv.data && csv.data.length > 0) {
                 let fileName = path.basename(filePath, path.extname(filePath));
-                let file = { name: fileName, data: csv.data };
+                let file = { name: fileName, data: csv.data, fields: csv.meta.fields };
                 resolve(file); // Return file data
             }
             else {
@@ -163,31 +166,73 @@ function loadFile(filePath) {
     });
 }
 
-function addFile(file) {
+function prepareRequests(file) {
 
     input = file;
 
-    let rows = file.data;
-
     requests = [];
 
-    // Populate requests to be sent
-    let i = rows.length;
+    // Check for address column
+    for(let i = 0; i < DEFAULT_ADDRESS_COLUMNS.length; i++ ) {
+        if(file.fields.indexOf(DEFAULT_ADDRESS_COLUMNS[i]) === -1)
+            throw ({ status: "ERROR", message: `Column not found, Expected column: '${DEFAULT_ADDRESS_COLUMNS[i]}'` });
+    }
 
+    // Check for address component columns
+    for(let key in addressQueryComponents) {
+        if(!addressQueryComponents.hasOwnProperty(key))
+            continue;
+        
+        if(file.fields.indexOf(key) === -1)
+            throw ({ status: "ERROR", message: `Column not found, Expected column: '${key}'` });
+    }
+
+    // Populate requests to be sent
+    let rows = file.data;
+    let i = rows.length;
     while(i--) {
 
         let row = rows[i];
 
-        // Get address string
-        let address = row[DEFAULT_ADDRESS_COLUMN_NAME];
+        let address = [];
+
+        // Add address columns
+        for(let i = 0; i < DEFAULT_ADDRESS_COLUMNS.length; i++)
+            address.push(row[DEFAULT_ADDRESS_COLUMNS[i]].trim());
+
+        // Remove duplicate address values
+        address.filter((item, index) => address.indexOf(item) === index);
+
+        // Concatenate address values
+        address = address.join(DEFAULT_ADDRESS_COLUMN_SEPARATOR);
 
         // Skip if address is empty
-        if(address.trim() == "") continue;
+        if(!address || address.trim() == "") {
+            console.warn("WARNING: skipping address (address empty): ", row);
+            continue;
+        }
 
-        // Construct url
-        let url = baseUrlApi + address;
+        // Construct initial URL with address
+        let url = baseUrlApi + "&address=" + address;
 
-        let componentList = [];
+        // Construct url address components
+        let components = [];
+        for(let key in addressQueryComponents) {
+            if(!addressQueryComponents.hasOwnProperty(key))
+                continue;
+            
+            let col = addressQueryComponents[key]; // Column
+            let val = row[key]; // Value
+
+            if(val && val.trim() != "")
+                components.push(`${col}:${val}`);
+        }
+
+        // Add components to url
+        if(components.length > 0) {
+            url += "&components=";
+            url += components.join("|");
+        }
 
         // Add request to array
         requests.push({ "request": function() { sendRequest(url, row); }, "numRequests": 0 });
@@ -268,22 +313,20 @@ function sendRequest(url, row) {
         console.error("REQUEST FAILED: ", url);
         // TODO: re-request - only request the same request a certain number of times (MAX_RETRIES) ?
     }).always(function() {
-
-        queue--;
-
-        if(queue <= 0)
+        if(--queue <= 0)
             finished();
     });
 }
 
 function parseResponse(response, row) {
+    console.log(row);
     if(response && response.status) {
         switch(response.status) {
             case "OK":
                 parseResults(row, response.results);
                 break;
             default:
-                console.error("failed: ", response);
+                console.error(response);
                 break;
         }
     }
@@ -293,9 +336,6 @@ function parseResponse(response, row) {
 }
 
 function parseResults(row, results) {
-
-    console.log(results);
-
     // Get first result (best match)
     for(let i = 0; i < results.length; i++) {
     
@@ -332,7 +372,7 @@ function updateProgress() {
     let percent = (requestCount / totalRequests) * 100;
 
     $('#file').find('.progress-bar').css('width', percent + '%').attr('aria-valuenow', percent);
-    $('#file').find('.file-progress-info').html(`${requestCount} of ${totalRequests} records complete. ? Remaining`);
+    $('#file').find('.file-progress-info').html(`${requestCount} of ${totalRequests} records complete.`);
 }
 
 // Called when all requests have been sent/received
@@ -400,10 +440,10 @@ function encodeQueryData(data) {
  *
  */
 function errorHandler(error) {
-
-    if(!error) return;
-
-    if(error.status && error.status !== "OK") {
+    if(error.status && error.status === "OK") {
+        // handled error
+    }
+    else if(error.status && error.status !== "OK") {
         if(error.message && error.message.trim() !== "")
             alert(error.message); // TODO - Make visual error banner
         else
@@ -411,5 +451,11 @@ function errorHandler(error) {
 
         if(error.details && error.details.trim() !== "")
             console.error(error.details);
+    }
+    else if(error) {
+        console.error(error);
+    }
+    else {
+        console.error("Unhandled error.");
     }
 }

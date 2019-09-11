@@ -44,16 +44,20 @@ html, body {
 
 /* START Content */
 .content {
+    display:flex;
     width:100%;
     margin: 70px 0px 0px 0px;
+    flex-direction: column;
 }
 .file {
-    display:none;
+    display:block;
     padding:20px;
+    flex: 0 0 150px;
+    visibility: hidden;
     background:#fff;
 }
 .file.shown {
-    display:block;
+    visibility: visible;
 }
 .file-info {
     padding-bottom:10px;
@@ -83,6 +87,27 @@ html, body {
 .file-controls .btn {
     min-width:100px;
     margin-left:20px;
+}
+
+.log-container {
+    display:flex;
+    flex:1 1 auto;
+    flex-direction: column;
+}
+.log-tab-content {
+    display:flex;
+    flex:1 1 auto;
+    padding:20px;
+    flex-direction: column;
+    background:#fff;
+}
+.log-tab-content > .tab-pane {
+    height:0px;
+    /* max-height:100%; */
+    padding-top:20px;
+    flex:1 1 auto;
+    overflow-x:hidden;
+    overflow-y:auto;
 }
 /* END Content */
 
@@ -152,6 +177,12 @@ a {
 }
 .btn-default:hover {
     background:#e5e5e5;
+}
+.nav-tabs .nav-link {
+    border-radius:0 !important;
+}
+.nav-tabs {
+    border-bottom: 1px solid #b3b3b3;
 }
 /* END Misc */
 
