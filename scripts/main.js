@@ -9,7 +9,7 @@ const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
 // const OUT_FILENAME = "./output/output.csv";
 const DEFAULT_OUTPUT_PATH = "./output/";
 
-const DEFAULT_ADDRESS_COLUMNS = ["Address1", "Address2"]; // Columns get concatenated with separator
+const DEFAULT_ADDRESS_COLUMNS = ["Address1", "Address2", "Post Code"]; // Columns get concatenated with separator
 const DEFAULT_ADDRESS_COLUMN_SEPARATOR = " "; // Separator for address columns (if multiple columns)
 const DEFAULT_REGION_BIAS = "AU";
 
@@ -27,18 +27,18 @@ const addressColumns = {
     "Street Number": { type: "street_number", name_type: "short_name"},
     "Street Address": { type: "street_address", name_type: "short_name"},
     "Route": { type: "route", name_type: "short_name" },
-    "Locality": { type: "locality", name_type: "short_name" },
+    "City": { type: "locality", name_type: "short_name" },
     "Sub Locality": { type: "sublocality", name_type: "short_name" },
     "Post Code": { type: "postal_code", name_type: "short_name" },
     "Country": { type: "country", name_type: "short_name" },
-    "Area 1": { type: "administrative_area_level_1", name_type: "short_name" },
-    "Area 2": { type: "administrative_area_level_2", name_type: "short_name" },
-    "Area 3": { type: "administrative_area_level_3", name_type: "short_name" },
-    "Area 4": { type: "administrative_area_level_4", name_type: "short_name" },
-    "Area 5": { type: "administrative_area_level_5", name_type: "short_name" },
-    "Premise": { type: "premise", name_type: "short_name" },
-    "Sub Premise": { type: "subpremise", name_type: "short_name" },
-    "Post Box": { type: "post_box", name_type: "short_name" }
+    "State": { type: "administrative_area_level_1", name_type: "short_name" },
+    // "Area 2": { type: "administrative_area_level_2", name_type: "short_name" },
+    // "Area 3": { type: "administrative_area_level_3", name_type: "short_name" },
+    // "Area 4": { type: "administrative_area_level_4", name_type: "short_name" },
+    // "Area 5": { type: "administrative_area_level_5", name_type: "short_name" },
+    // "Premise": { type: "premise", name_type: "short_name" },
+    // "Sub Premise": { type: "subpremise", name_type: "short_name" },
+    // "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
 let baseUrlApi = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+DEFAULT_REGION_BIAS;
@@ -76,8 +76,7 @@ function setUpListeners() {
     // Button - Remove
     $('#btnRemove').on('click', function() {
         
-        running = false;
-
+        $('#file').removeClass('shown');
 
     });
 
@@ -197,18 +196,20 @@ function prepareRequests(file) {
         let address = [];
 
         // Add address columns
-        for(let i = 0; i < DEFAULT_ADDRESS_COLUMNS.length; i++)
-            address.push(row[DEFAULT_ADDRESS_COLUMNS[i]].trim());
+        for(let i = 0; i < DEFAULT_ADDRESS_COLUMNS.length; i++) {
+            address.push(row[DEFAULT_ADDRESS_COLUMNS[i]]);
+        }
 
         // Remove duplicate address values
         address.filter((item, index) => address.indexOf(item) === index);
 
-        // Concatenate address values
-        address = address.join(DEFAULT_ADDRESS_COLUMN_SEPARATOR);
+        // Concatenate address values (and remove excess whitespace)
+        address = address.join(DEFAULT_ADDRESS_COLUMN_SEPARATOR).replace(/\s+/g, " ");
 
         // Skip if address is empty
         if(!address || address.trim() == "") {
-            console.warn("WARNING: skipping address (address empty): ", row);
+            log.warn("WARNING: Skipping address (address empty) on line " + (i+2));
+            //console.warn("WARNING: Skipping address (address empty) on line " + (i+2));
             continue;
         }
 
@@ -242,9 +243,11 @@ function prepareRequests(file) {
 
     let fileEl = $('#file');
     fileEl.find('.file-name').html(file.name);
-    fileEl.find('.file-progress-info').html(`${file.data.length} Records`);
+    fileEl.find('.file-progress-info').html(`${totalRequests} / ${file.data.length} Records Ready.`);
     fileEl.find('.progress-bar').css('width', '0%').attr('aria-valuenow', 0);
     fileEl.addClass('shown');
+
+    log(`${file.name} Loaded`);
 }
 
 function start() {
@@ -254,6 +257,8 @@ function start() {
     $('#file').addClass('running');
 
     startTime = Date.now();
+
+    log(`-- STARTED --`);
 
     running = true;
 
@@ -310,6 +315,7 @@ function sendRequest(url, row) {
     }).done(function(response) {
         parseResponse(response, row);
     }).fail(function() {
+        log.error(`Error: Request Failed: ${url}`);
         console.error("REQUEST FAILED: ", url);
         // TODO: re-request - only request the same request a certain number of times (MAX_RETRIES) ?
     }).always(function() {
@@ -319,13 +325,14 @@ function sendRequest(url, row) {
 }
 
 function parseResponse(response, row) {
-    console.log(row);
     if(response && response.status) {
         switch(response.status) {
+            case "ZERO_RESULTS":
             case "OK":
                 parseResults(row, response.results);
                 break;
             default:
+                log.error(`Unhandled Response: ${response.status}. Check console for details.`)
                 console.error(response);
                 break;
         }
@@ -336,29 +343,44 @@ function parseResponse(response, row) {
 }
 
 function parseResults(row, results) {
-    // Get first result (best match)
-    for(let i = 0; i < results.length; i++) {
-    
-        let result = results[i];
+    if(results.length > 0) {
+        // Get first result (best match)
+        for(let i = 0; i < results.length; i++) {
+        
+            let result = results[i];
 
-        let obj = {
-            "Input": row["Full Address"],
-            "Accuracy": result["geometry"]["location_type"],
-            "Partial": (result["partial_match"] === true) || false,
-            "Types": result["types"].join(",")
-        };
+            var input = `${row["Address1"]} ${row["Address2"]} ${row["City"]} ${row["State"]} ${row["Post Code"]} ${row["Country"]}`;
 
-        for(let key in addressColumns) {
-            if(!addressColumns.hasOwnProperty(key))
-                continue;
+            // Initialize output object
+            let obj = {
+                "Input": input,
+                "Accuracy": result["geometry"]["location_type"],
+                "Partial": (result["partial_match"] === true) || false,
+                "Types": result["types"].join(",")
+            };
 
-            var type = addressColumns[key]["type"];
-            var nameType = addressColumns[key]["name_type"];
+            // Populate address columns
+            for(let key in addressColumns) {
+                if(!addressColumns.hasOwnProperty(key))
+                    continue;
 
-            obj[key] = getAddressComponent(result, type, nameType);
+                var type = addressColumns[key]["type"];
+                var nameType = addressColumns[key]["name_type"];
+
+                obj[key] = getAddressComponent(result, type, nameType);
+            }
+
+            console.log("row: ", row);
+            console.log("obj: ", obj);
+
+            let newObj = $.extend({}, row, obj);
+            console.log("new: ", newObj);
+
+            output.push(obj);
         }
-
-        output.push(obj);
+    }
+    else {
+        console.log(".,~");
     }
 
     function getAddressComponent(result, type, nameType) {
@@ -378,7 +400,7 @@ function updateProgress() {
 // Called when all requests have been sent/received
 function finished() {
 
-    console.log("---- FINISHED ----");
+    log("-- FINISHED --");
 
     updateProgress();
 
@@ -445,9 +467,9 @@ function errorHandler(error) {
     }
     else if(error.status && error.status !== "OK") {
         if(error.message && error.message.trim() !== "")
-            alert(error.message); // TODO - Make visual error banner
+            log.error(error.message);
         else
-            alert("An unknown error has occured.");
+            log.error("An unknown error has occured.");
 
         if(error.details && error.details.trim() !== "")
             console.error(error.details);
@@ -458,4 +480,43 @@ function errorHandler(error) {
     else {
         console.error("Unhandled error.");
     }
+}
+
+function log(str) {
+    let time = formatTime(Date.now());
+    let logMessage = `${time}: ${str}`;
+    let logLine = $('<p class="log-line log-info">'+logMessage+'</p>');
+    $('#log-summary').append(logLine);
+    log.update();
+}
+log.warn = function(str) {
+    let logLine = $('<p class="log-line log-warn">'+str+'</p>');
+    $('#log-warnings').append(logLine);
+    log.update();
+};
+log.error = function(str) {
+    let logLine = $('<p class="log-line log-err">'+str+'</p>');
+    $('#log-errors').append(logLine);
+    log.update();
+};
+log.update = function() {
+    $('#log-summary-tab').html("Summary (" + $('#log-summary > p').length + ")");
+    $('#log-warnings-tab').html("Warnings (" + $('#log-warnings > p').length + ")");
+    $('#log-errors-tab').html("Errors (" + $('#log-errors > p').length + ")");
+};
+
+function formatTime(time) {
+    var d = new Date(time);
+    var hr = d.getHours();
+    var min = d.getMinutes();
+    var sec = d.getSeconds();
+    if (min < 10) {
+        min = "0" + min;
+    }
+    var ampm = " AM";
+    if( hr > 12 ) {
+        hr -= 12;
+        ampm = " PM";
+    }
+    return hr + ":" + min + ":" + sec + ampm;
 }
