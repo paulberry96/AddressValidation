@@ -9,44 +9,45 @@ const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
 // const OUT_FILENAME = "./output/output.csv";
 const DEFAULT_OUTPUT_PATH = "./output/";
 
-const DEFAULT_ADDRESS_COLUMNS = ["Address1", "Address2", "Post Code"]; // Columns get concatenated with separator
-const DEFAULT_ADDRESS_COLUMN_SEPARATOR = " "; // Separator for address columns (if multiple columns)
-const DEFAULT_REGION_BIAS = "AU";
+// Expected input columns - throws error if these do not exist in input file
+const ADDRESS_COLUMNS = ["Address1","Address2","City","State","Post Code","Country"];
+const ADDRESS_QUERY_COLUMNS = ["Address1", "Address2", "Post Code"]; // Columns get concatenated with separator
+const ADDRESS_QUERY_COLUMNS_SEPARATOR = " "; // Separator for address columns (if multiple columns)
+const ADDRESS_COMPONENTS = {
+    "Country": "country",
+    "City": "locality",
+    "State": "administrative_area"
+};
+const REGION_BIAS = "AU";
 
 const MAX_QUERIES_PER_SECOND = 10; // As of Sep 2019, Google has a max QPS of 10 ??
 const MAX_QUERY_RETRIES = 3; // Number of times a single request will retry after failing
 const MAX_QUERY_TOTAL_RETRIES = 100; // Total number of retries for all combined requests (set to 0 for unlimited)
 
-const addressQueryComponents = {
-    "Country": "country",
-    "City": "locality",
-    "State": "administrative_area"
-};
-
-const addressColumns = {
+const addressColumnMapping = {
+    "Sub Premise": { type: "subpremise", name_type: "short_name" },
+    "Premise": { type: "premise", name_type: "short_name" },
     "Street Number": { type: "street_number", name_type: "short_name"},
-    "Street Address": { type: "street_address", name_type: "short_name"},
     "Route": { type: "route", name_type: "short_name" },
     "City": { type: "locality", name_type: "short_name" },
-    "Sub Locality": { type: "sublocality", name_type: "short_name" },
-    "Post Code": { type: "postal_code", name_type: "short_name" },
-    "Country": { type: "country", name_type: "short_name" },
     "State": { type: "administrative_area_level_1", name_type: "short_name" },
+    "Post Code": { type: "postal_code", name_type: "short_name" },
+    "Country": { type: "country", name_type: "short_name" }
+    // "Street Address": { type: "street_address", name_type: "short_name"},
+    // "Sub Locality": { type: "sublocality", name_type: "short_name" },
     // "Area 2": { type: "administrative_area_level_2", name_type: "short_name" },
     // "Area 3": { type: "administrative_area_level_3", name_type: "short_name" },
     // "Area 4": { type: "administrative_area_level_4", name_type: "short_name" },
     // "Area 5": { type: "administrative_area_level_5", name_type: "short_name" },
-    // "Premise": { type: "premise", name_type: "short_name" },
-    // "Sub Premise": { type: "subpremise", name_type: "short_name" },
     // "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
-let baseUrlApi = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+DEFAULT_REGION_BIAS;
+let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+REGION_BIAS;
 
 let requests = []; // Gets populated with AJAX requests
 let running = false;
 let queue = 0;
-let totalRequests = 0; // Total number of requests
+let totalRequests = 0; // Total number of requests to be sent
 let requestCount = 0; // Keeps track of how many requests have been sent in total (for throttling)
 let qps = 0; // Current queries per second
 let startTime = null;
@@ -70,30 +71,33 @@ function setUpListeners() {
         showFilePicker().then(loadFile).then(prepareRequests).catch(errorHandler);
     });
 
+    // Button - Export
+    $('#btnExport').on('click', exportFile);
+
     // Button - Start
     $('#btnStart').on('click', start);
 
     // Button - Remove
     $('#btnRemove').on('click', function() {
-        
-        $('#file').removeClass('shown');
-
+        reset();
+        log(`-- REMOVED --`);
     });
 
     // Button - Pause
     $('#btnPause').on('click', function() {
-        
         running = false;
-
-
+        $('#file').removeClass('running');
+        log(`-- PAUSED --`);
     });
 
     // Button - Stop
     $('#btnStop').on('click', function() {
-        
         running = false;
-
-
+        $('#file').removeClass('running');
+        $('#file').find('.progress-bar').css('width', '0%').attr('aria-valuenow', 0);
+        $('#file').find('.file-progress-info').html(`${totalRequests} / ${input.data.length} Records Ready.`);
+        reset(true);
+        log(`-- STOPPED --`);
     });
 }
 
@@ -150,9 +154,11 @@ function loadFile(filePath) {
                 }
             });
 
+            // Error handling
             if(csv.errors && csv.errors.length > 0)
                 reject({ status: "ERROR", message: "CSV Parse Errors. Check console for details", details: csv.errors });
 
+            // Return file data
             if(csv.data && csv.data.length > 0) {
                 let fileName = path.basename(filePath, path.extname(filePath));
                 let file = { name: fileName, data: csv.data, fields: csv.meta.fields };
@@ -167,19 +173,25 @@ function loadFile(filePath) {
 
 function prepareRequests(file) {
 
+    reset();
+
     input = file;
 
-    requests = [];
-
-    // Check for address column
-    for(let i = 0; i < DEFAULT_ADDRESS_COLUMNS.length; i++ ) {
-        if(file.fields.indexOf(DEFAULT_ADDRESS_COLUMNS[i]) === -1)
-            throw ({ status: "ERROR", message: `Column not found, Expected column: '${DEFAULT_ADDRESS_COLUMNS[i]}'` });
+    // Make sure all expected address columns exist
+    for(let i = 0; i < ADDRESS_COLUMNS.length; i++ ) {
+        if(file.fields.indexOf(ADDRESS_COLUMNS[i]) === -1)
+            throw ({ status: "ERROR", message: `Column not found, Expected column: '${ADDRESS_COLUMNS[i]}'` });
     }
 
-    // Check for address component columns
-    for(let key in addressQueryComponents) {
-        if(!addressQueryComponents.hasOwnProperty(key))
+    // Make sure all expected address query columns exist
+    for(let i = 0; i < ADDRESS_QUERY_COLUMNS.length; i++ ) {
+        if(file.fields.indexOf(ADDRESS_QUERY_COLUMNS[i]) === -1)
+            throw ({ status: "ERROR", message: `Column not found, Expected column: '${ADDRESS_QUERY_COLUMNS[i]}'` });
+    }
+
+    // Make usre all address component columns exist
+    for(let key in ADDRESS_COMPONENTS) {
+        if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
             continue;
         
         if(file.fields.indexOf(key) === -1)
@@ -196,15 +208,15 @@ function prepareRequests(file) {
         let address = [];
 
         // Add address columns
-        for(let i = 0; i < DEFAULT_ADDRESS_COLUMNS.length; i++) {
-            address.push(row[DEFAULT_ADDRESS_COLUMNS[i]]);
+        for(let i = 0; i < ADDRESS_QUERY_COLUMNS.length; i++) {
+            address.push(row[ADDRESS_QUERY_COLUMNS[i]]);
         }
 
         // Remove duplicate address values
         address.filter((item, index) => address.indexOf(item) === index);
 
         // Concatenate address values (and remove excess whitespace)
-        address = address.join(DEFAULT_ADDRESS_COLUMN_SEPARATOR).replace(/\s+/g, " ");
+        address = address.join(ADDRESS_QUERY_COLUMNS_SEPARATOR).replace(/\s+/g, " ");
 
         // Skip if address is empty
         if(!address || address.trim() == "") {
@@ -214,15 +226,15 @@ function prepareRequests(file) {
         }
 
         // Construct initial URL with address
-        let url = baseUrlApi + "&address=" + address;
+        let url = baseApiUrl + "&address=" + address;
 
         // Construct url address components
         let components = [];
-        for(let key in addressQueryComponents) {
-            if(!addressQueryComponents.hasOwnProperty(key))
+        for(let key in ADDRESS_COMPONENTS) {
+            if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
                 continue;
             
-            let col = addressQueryComponents[key]; // Column
+            let col = ADDRESS_COMPONENTS[key]; // Column
             let val = row[key]; // Value
 
             if(val && val.trim() != "")
@@ -244,23 +256,39 @@ function prepareRequests(file) {
     let fileEl = $('#file');
     fileEl.find('.file-name').html(file.name);
     fileEl.find('.file-progress-info').html(`${totalRequests} / ${file.data.length} Records Ready.`);
-    fileEl.find('.progress-bar').css('width', '0%').attr('aria-valuenow', 0);
     fileEl.addClass('shown');
 
     log(`${file.name} Loaded`);
 }
 
+function reset(keepInput) {
+
+    keepInput = keepInput || false;
+
+    requestCount = 0;
+    qps = 0;
+    requests = [];
+    output = [];
+
+    $('#file').find('.progress-bar').css('width', 0 + '%').attr('aria-valuenow', 0);
+    $('#file').find('.file-progress-info').html(`${requestCount} of ${totalRequests} records complete.`);
+
+    if(!keepInput) {
+        input = null;
+        $('#file').removeClass('shown');
+    }
+}
+
 function start() {
 
-    if(input === null) return;
-
-    $('#file').addClass('running');
+    if(input === null || requests === null || requests.length <= 0) return;
 
     startTime = Date.now();
 
-    log(`-- STARTED --`);
-
+    $('#file').addClass('running');
     running = true;
+
+    log(`-- STARTED --`);
 
     let mainInterval = setInterval(function() {
 
@@ -305,8 +333,20 @@ function start() {
 
                 requestCount++;
             }
+            else {
+                break;
+            }
         }
-    }, 100);
+    }, 200);
+}
+
+function exportFile() {
+    if(output === null || output.length <= 0) {
+        alert("Nothing to export");
+        return;
+    }
+    let fileName = input.name;
+    showFileSaver(fileName).then(saveFile).catch(errorHandler);
 }
 
 function sendRequest(url, row) {
@@ -344,49 +384,37 @@ function parseResponse(response, row) {
 
 function parseResults(row, results) {
     if(results.length > 0) {
+
         // Get first result (best match)
-        for(let i = 0; i < results.length; i++) {
-        
-            let result = results[i];
+        let result = results[0];
 
-            var input = `${row["Address1"]} ${row["Address2"]} ${row["City"]} ${row["State"]} ${row["Post Code"]} ${row["Country"]}`;
-
-            // Initialize output object
-            let obj = {
-                "Input": input,
-                "Accuracy": result["geometry"]["location_type"],
-                "Partial": (result["partial_match"] === true) || false,
-                "Types": result["types"].join(",")
-            };
-
+        let accuracy = result["geometry"]["location_type"];
+    
+        if(accuracy === "ROOFTOP") {
+            let addr = {};
             // Populate address columns
-            for(let key in addressColumns) {
-                if(!addressColumns.hasOwnProperty(key))
+            for(let key in addressColumnMapping) {
+                if(!addressColumnMapping.hasOwnProperty(key))
                     continue;
-
-                var type = addressColumns[key]["type"];
-                var nameType = addressColumns[key]["name_type"];
-
-                obj[key] = getAddressComponent(result, type, nameType);
+                let type = addressColumnMapping[key]["type"];
+                let nameType = addressColumnMapping[key]["name_type"];
+                let component = result["address_components"].filter(function(v) { return v["types"].indexOf(type) > -1 });
+                addr[key] = component.length > 0 ? component[0][nameType].toString() : "";
             }
+    
+            // Concatenate fields for Address1, replace multiple spaces with one space, and trim leading/trailing spaces
+            let addressConcat = `${addr['Sub Premise']}/${addr['Street Number']} ${addr['Route']}`.replace(/\s+/g, " ").trim();
 
-            console.log("row: ", row);
-            console.log("obj: ", obj);
-
-            let newObj = $.extend({}, row, obj);
-            console.log("new: ", newObj);
-
-            output.push(obj);
+            row["Address1"] = (addr['Premise'] === "") ? addressConcat : addr['Premise'];
+            row["Address2"] = (addr['Premise'] === "") ? "" : addressConcat;
+            row["City"] = addr['City'];
+            row["State"] = addr['State'];
+            row["Post Code"] = addr['Post Code'];
+            row["Country"] = addr['Country'];
         }
     }
-    else {
-        console.log(".,~");
-    }
 
-    function getAddressComponent(result, type, nameType) {
-        var component = result["address_components"].filter(function(v) { return v["types"].indexOf(type) > -1 });
-        return component.length > 0 ? component[0][nameType] : "";
-    }
+    output.push(row);
 }
 
 function updateProgress() {
@@ -405,14 +433,6 @@ function finished() {
     updateProgress();
 
     $('#file').removeClass('running');
-
-    let fileName = input.name;
-
-    console.log(input);
-    console.log(fileName);
-
-    // Save File
-    showFileSaver(fileName).then(saveFile).catch(errorHandler);
 }
 
 function showFileSaver(fileName) {
@@ -439,18 +459,13 @@ function saveFile(filePath) {
 
     return new Promise(function(resolve, reject) {
         fs.writeFile(filePath, csv, function(err) {
+            console.log(err);
             if(err)
                 reject({ status: "ERROR", message: "SaveFile Error. Check console for details", details: err });
         });
     });
 }
 
-function encodeQueryData(data) {
-    const ret = [];
-    for(let d in data)
-        ret.push(encodeURIComponent(d) + '=' + encodeURIComponent(data[d]));
-    return ret.join('&');
- }
 
 /**
  * Alerts the user and prints out errors to the console
@@ -510,11 +525,13 @@ function formatTime(time) {
     var hr = d.getHours();
     var min = d.getMinutes();
     var sec = d.getSeconds();
-    if (min < 10) {
+    if(min < 10) {
         min = "0" + min;
     }
+    if(sec < 10)
+        sec = "0" + sec;
     var ampm = " AM";
-    if( hr > 12 ) {
+    if(hr > 12) {
         hr -= 12;
         ampm = " PM";
     }
