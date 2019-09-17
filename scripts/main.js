@@ -403,7 +403,13 @@ function parseResults(row, results) {
             }
     
             // Concatenate fields for Address1, replace multiple spaces with one space, and trim leading/trailing spaces
-            let addressConcat = `${addr['Sub Premise']}/${addr['Street Number']} ${addr['Route']}`.replace(/\s+/g, " ").trim();
+            let addressConcat = "";
+            
+            if(addr['Sub Premise'] != "")
+                addressConcat += `${addr['Sub Premise']}/`;
+
+            addressConcat += `${addr['Street Number']} ${addr['Route']}`;
+            addressConcat = addressConcat.replace(/\s+/g, " ").trim();
 
             row["Address1"] = (addr['Premise'] === "") ? addressConcat : addr['Premise'];
             row["Address2"] = (addr['Premise'] === "") ? "" : addressConcat;
