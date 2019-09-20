@@ -189,7 +189,7 @@ function prepareRequests(file) {
             throw ({ status: "ERROR", message: `Column not found, Expected column: '${ADDRESS_QUERY_COLUMNS[i]}'` });
     }
 
-    // Make usre all address component columns exist
+    // Make sure all address component columns exist
     for(let key in ADDRESS_COMPONENTS) {
         if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
             continue;
@@ -200,17 +200,18 @@ function prepareRequests(file) {
 
     // Populate requests to be sent
     let rows = file.data;
-    let i = rows.length;
+    let i = totalRequests = rows.length;
     while(i--) {
 
         let row = rows[i];
 
+        let request = {};
+
         let address = [];
 
         // Add address columns
-        for(let i = 0; i < ADDRESS_QUERY_COLUMNS.length; i++) {
+        for(let i = 0; i < ADDRESS_QUERY_COLUMNS.length; i++)
             address.push(row[ADDRESS_QUERY_COLUMNS[i]]);
-        }
 
         // Remove duplicate address values
         address.filter((item, index) => address.indexOf(item) === index);
@@ -220,38 +221,50 @@ function prepareRequests(file) {
 
         // Skip if address is empty
         if(!address || address.trim() == "") {
+            totalRequests--;
+            request["skip"] = true;
             log.warn("WARNING: Skipping address (address empty) on line " + (i+2));
-            //console.warn("WARNING: Skipping address (address empty) on line " + (i+2));
-            continue;
+        }
+        else { // Has address, proceed
+
+            // Construct initial URL with address
+            let url = baseApiUrl + "&address=" + address;
+
+            // Construct url address components
+            let components = [];
+            for(let key in ADDRESS_COMPONENTS) {
+                if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
+                    continue;
+                
+                let col = ADDRESS_COMPONENTS[key]; // Column
+                let val = row[key]; // Value
+
+                if(val && val.trim() != "")
+                    components.push(`${col}:${val}`);
+            }
+
+            // Add components to url
+            if(components.length > 0) {
+                url += "&components=";
+                url += components.join("|");
+            }
+
+            // Request function
+            request["request"] = function() {
+                sendRequest(url, request);
+            };
+
+            request["numRequests"] = 0;
         }
 
-        // Construct initial URL with address
-        let url = baseApiUrl + "&address=" + address;
-
-        // Construct url address components
-        let components = [];
-        for(let key in ADDRESS_COMPONENTS) {
-            if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
-                continue;
-            
-            let col = ADDRESS_COMPONENTS[key]; // Column
-            let val = row[key]; // Value
-
-            if(val && val.trim() != "")
-                components.push(`${col}:${val}`);
-        }
-
-        // Add components to url
-        if(components.length > 0) {
-            url += "&components=";
-            url += components.join("|");
-        }
+        // Original row
+        request["row"] = row;
 
         // Add request to array
-        requests.push({ "request": function() { sendRequest(url, row); }, "numRequests": 0 });
+        requests.push(request);
     }
 
-    queue = totalRequests = requests.length;
+    queue = totalRequests;
 
     let fileEl = $('#file');
     fileEl.find('.file-name').html(file.name);
@@ -328,10 +341,17 @@ function start() {
                 //     queryTotalRetries++;
                 // }
 
-                request["numRequests"]++; // Increment counter for this request
-                request["request"](); // Call the request
+                if(!request["skip"]) {
+                    request["numRequests"]++; // Increment counter for this request
+                    request["request"](); // Call the request
 
-                requestCount++;
+                    requestCount++;
+                }
+                else {
+                    console.log("skipping");
+                    console.log(request);
+                    output.push(request["row"]);
+                }
             }
             else {
                 break;
@@ -346,14 +366,16 @@ function exportFile() {
         return;
     }
     let fileName = input.name;
-    showFileSaver(fileName).then(saveFile).catch(errorHandler);
+    showFileSaver(fileName).then(saveFile).then(function() {
+        log("-- EXPORTED --");
+    }).catch(errorHandler);
 }
 
-function sendRequest(url, row) {
+function sendRequest(url, request) {
     $.ajax({
         url: url
     }).done(function(response) {
-        parseResponse(response, row);
+        parseResponse(response, request["row"]);
     }).fail(function() {
         log.error(`Error: Request Failed: ${url}`);
         console.error("REQUEST FAILED: ", url);
@@ -436,6 +458,8 @@ function finished() {
 
     log("-- FINISHED --");
 
+    console.log(output);
+
     updateProgress();
 
     $('#file').removeClass('running');
@@ -451,10 +475,10 @@ function showFileSaver(fileName) {
                 { name: 'All Files', extensions: ['*'] }
             ]
         }, function(filePath) {
-            if(filePath && filePath != null)
-                resolve(filePath);
-            else
+            if(!filePath || filePath == "")
                 reject({ status: "OK", message: "showSaveDialog Cancelled." });
+
+            resolve(filePath);
         });
     });
 }
@@ -465,9 +489,10 @@ function saveFile(filePath) {
 
     return new Promise(function(resolve, reject) {
         fs.writeFile(filePath, csv, function(err) {
-            console.log(err);
             if(err)
                 reject({ status: "ERROR", message: "SaveFile Error. Check console for details", details: err });
+
+            resolve();
         });
     });
 }
