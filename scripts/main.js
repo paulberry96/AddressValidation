@@ -11,12 +11,12 @@ const DEFAULT_OUTPUT_PATH = "./output/";
 
 // Expected input columns - throws error if these do not exist in input file
 const ADDRESS_COLUMNS = ["Address1","Address2","City","State","Post Code","Country"];
-const ADDRESS_QUERY_COLUMNS = ["Address1", "Address2", "Post Code"]; // Columns get concatenated with separator
+const ADDRESS_QUERY_COLUMNS = ["Address1", "Address2", "City", "State", "Post Code", "Country"]; // Columns get concatenated with separator
 const ADDRESS_QUERY_COLUMNS_SEPARATOR = " "; // Separator for address columns (if multiple columns)
 const ADDRESS_COMPONENTS = {
-    "Country": "country",
-    "City": "locality",
-    "State": "administrative_area"
+    // "Country": "country",
+    // "City": "locality",
+    // "State": "administrative_area"
 };
 const REGION_BIAS = "AU";
 
@@ -372,6 +372,9 @@ function exportFile() {
 }
 
 function sendRequest(url, request) {
+
+    console.log(url);
+
     $.ajax({
         url: url
     }).done(function(response) {
