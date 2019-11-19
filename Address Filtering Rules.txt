@@ -1,7 +1,0 @@
-Good records:
-
-Accuracy = 
-
-Bad records:
-Accuracy is any of the following: APPROXIMATE, GEOMETRIC_CENTER
-types include any of the following: post_office
