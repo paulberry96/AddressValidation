@@ -11,14 +11,22 @@ const DEFAULT_OUTPUT_PATH = "./output/";
 
 // Expected input columns - throws error if these do not exist in input file
 const ADDRESS_COLUMNS = ["Address1","Address2","City","State","Post Code","Country"];
+// const ADDRESS_COLUMNS = ["Serial"];
 const ADDRESS_QUERY_COLUMNS = ["Address1", "Address2", "City", "State", "Post Code", "Country"]; // Columns get concatenated with separator
+// const ADDRESS_QUERY_COLUMNS = ["Serial"]; // Columns get concatenated with separator
 const ADDRESS_QUERY_COLUMNS_SEPARATOR = " "; // Separator for address columns (if multiple columns)
 const ADDRESS_COMPONENTS = {
     // "Country": "country",
     // "City": "locality",
     // "State": "administrative_area"
 };
-const REGION_BIAS = "AU";
+const REGION_BIAS_SELECTION = [
+    { value: '', text: 'Select Region Bias' },
+    { value: 'AU', text: 'Australia' },
+    { value: 'US', text: 'United States' },
+    { value: 'NZ', text: 'New Zealand' }
+];
+var REGION_BIAS = "";
 
 const MAX_QUERIES_PER_SECOND = 10; // As of Sep 2019, Google has a max QPS of 10 ??
 const MAX_QUERY_RETRIES = 3; // Number of times a single request will retry after failing
@@ -42,7 +50,8 @@ const addressColumnMapping = {
     // "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
-let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+REGION_BIAS;
+// let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+REGION_BIAS;
+let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY;
 
 let requests = []; // Gets populated with AJAX requests
 let running = false;
@@ -65,6 +74,16 @@ $(document).ready(function() {
 });
 
 function setUpListeners() {
+
+    for(let i = 0; i < REGION_BIAS_SELECTION.length; i++) {
+        let r = REGION_BIAS_SELECTION[i];
+        let opt = $('<option value="'+r.value+'">'+r.text+'</option>');
+        $('#selRegionBias').append(opt);
+    }
+
+    $('#selRegionBias').on('change', function() {
+        REGION_BIAS = $(this).val();
+    });
 
     // Button - Browse
     $('#btnBrowse').on('click', function() {
@@ -373,7 +392,9 @@ function exportFile() {
 
 function sendRequest(url, request) {
 
-    console.log(url);
+    // Append Region Bias to URL if populated
+    if(REGION_BIAS != "")
+        url += "&region="+REGION_BIAS;
 
     $.ajax({
         url: url
@@ -539,11 +560,13 @@ function log(str) {
     log.update();
 }
 log.warn = function(str) {
+    str = str.replace("&region", "&amp;region");
     let logLine = $('<p class="log-line log-warn">'+str+'</p>');
     $('#log-warnings').append(logLine);
     log.update();
 };
 log.error = function(str) {
+    str = str.replace("&region", "&amp;region");
     let logLine = $('<p class="log-line log-err">'+str+'</p>');
     $('#log-errors').append(logLine);
     log.update();

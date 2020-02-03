@@ -32,13 +32,19 @@ html, body {
     height:100%;
 }
 .header-controls .main-control {
-    width: 250px;
+    display:flex;
+    flex-direction:row;
+    align-items:center;
     height:100%;
     padding:15px;
 }
 .header-controls .main-control .btn {
     width: 150px;
     height: 40px;
+    flex: 0 0 auto;
+}
+.header-controls .main-control select {
+    margin-left:20px;
 }
 /* END Header */
 
