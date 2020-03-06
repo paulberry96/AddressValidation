@@ -50,6 +50,8 @@ const addressColumnMapping = {
     // "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
+const placeTypeWhitelist = [ 'premise', 'street_address', 'subpremise' ]; // Only cleanse these place types
+
 // let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+REGION_BIAS;
 let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY;
 
@@ -429,6 +431,11 @@ function parseResponse(response, row) {
 }
 
 function parseResults(row, results) {
+
+    // console.log("===========================");
+    // console.log(row);
+    // console.log(results);
+
     if(results.length > 0) {
 
         // Get first result (best match)
@@ -436,7 +443,18 @@ function parseResults(row, results) {
 
         let accuracy = result["geometry"]["location_type"];
     
-        if(accuracy === "ROOFTOP") {
+        row["location_type"] = accuracy;
+        row["types"] = result['types'].join("|");
+        row["partial_match"] = result['partial_match'];
+
+        let proceed = false;
+        for(let i = 0; i < result['types'].length; i++) {
+            if(placeTypeWhitelist.indexOf(result['types'][i]) > -1) {
+                proceed = true;
+            }
+        }
+
+        if(accuracy === "ROOFTOP" && !result['partial_match'] && proceed) {
             let addr = {};
             // Populate address columns
             for(let key in addressColumnMapping) {
@@ -481,8 +499,6 @@ function updateProgress() {
 function finished() {
 
     log("-- FINISHED --");
-
-    console.log(output);
 
     updateProgress();
 
