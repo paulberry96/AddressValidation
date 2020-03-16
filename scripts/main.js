@@ -1,8 +1,9 @@
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
+const path = require('path');
 const { dialog } = require('electron').remote
-const papaparse = require("papaparse");
+const papaparse = require('papaparse');
 
+// Replace with your API Key
 const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
 
 // const IN_FILENAME = "Client Dump Test.csv";
@@ -28,7 +29,7 @@ const REGION_BIAS_SELECTION = [
 ];
 var REGION_BIAS = "";
 
-const MAX_QUERIES_PER_SECOND = 10; // As of Sep 2019, Google has a max QPS of 10 ??
+const MAX_QUERIES_PER_SECOND = 9; // As of Sep 2019, Google has a max QPS of 10 ??
 const MAX_QUERY_RETRIES = 3; // Number of times a single request will retry after failing
 const MAX_QUERY_TOTAL_RETRIES = 100; // Total number of retries for all combined requests (set to 0 for unlimited)
 
