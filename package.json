@@ -14,10 +14,10 @@
   "author": "Paul Berry",
   "license": "ISC",
   "dependencies": {
-    "bootstrap": "^4.1.1",
+    "bootstrap": "^4.4.1",
     "jquery": "^3.3.1",
     "papaparse": "^4.6.2",
-    "popper.js": "^1.14.6"
+    "popper.js": "^1.16.1"
   },
   "devDependencies": {
     "electron": "^2.0.1",
