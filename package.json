@@ -14,15 +14,14 @@
   "author": "Paul Berry",
   "license": "ISC",
   "dependencies": {
-    "bootstrap": "^4.4.1",
+    "bootstrap": "^4.5.0",
     "jquery": "^3.5.0",
-    "papaparse": "^4.6.2",
+    "papaparse": "^5.2.0",
     "popper.js": "^1.16.1"
   },
   "devDependencies": {
-    "electron": "^2.0.1",
-    "electron-packager": "^12.1.0",
-    "electron-reload": "^1.2.2"
+    "electron": "^9.1.1",
+    "electron-packager": "^15.0.0"
   },
   "bugs": {
     "url": "https://github.com/paulberry96/AddressValidation/issues"

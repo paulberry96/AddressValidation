@@ -6,21 +6,20 @@ const papaparse = require('papaparse');
 // Replace with your API Key
 const API_KEY = "AIzaSyCel8LMzmBd9EmULUe1M8WTzMFIOQjROsM";
 
-// const IN_FILENAME = "Client Dump Test.csv";
-// const OUT_FILENAME = "./output/output.csv";
-const DEFAULT_OUTPUT_PATH = "./output/";
-
 // Expected input columns - throws error if these do not exist in input file
-const ADDRESS_COLUMNS = ["Address1","Address2","City","State","Post Code","Country"];
-// const ADDRESS_COLUMNS = ["Serial"];
+const ADDRESS_COLUMNS = ["Address1", "Address2", "City", "State", "Post Code", "Country"];
+
 const ADDRESS_QUERY_COLUMNS = ["Address1", "Address2", "City", "State", "Post Code", "Country"]; // Columns get concatenated with separator
-// const ADDRESS_QUERY_COLUMNS = ["Serial"]; // Columns get concatenated with separator
-const ADDRESS_QUERY_COLUMNS_SEPARATOR = " "; // Separator for address columns (if multiple columns)
+
+// Separator for address columns (if multiple columns)
+const ADDRESS_QUERY_COLUMNS_SEPARATOR = " ";
+
 const ADDRESS_COMPONENTS = {
     // "Country": "country",
     // "City": "locality",
     // "State": "administrative_area"
 };
+
 const REGION_BIAS_SELECTION = [
     { value: '', text: 'Select Region Bias' },
     { value: 'AU', text: 'Australia' },
@@ -36,7 +35,7 @@ const MAX_QUERY_TOTAL_RETRIES = 100; // Total number of retries for all combined
 const addressColumnMapping = {
     "Sub Premise": { type: "subpremise", name_type: "short_name" },
     "Premise": { type: "premise", name_type: "short_name" },
-    "Street Number": { type: "street_number", name_type: "short_name"},
+    "Street Number": { type: "street_number", name_type: "short_name" },
     "Route": { type: "route", name_type: "short_name" },
     "City": { type: "locality", name_type: "short_name" },
     "State": { type: "administrative_area_level_1", name_type: "short_name" },
@@ -51,10 +50,9 @@ const addressColumnMapping = {
     // "Post Box": { type: "post_box", name_type: "short_name" }
 };
 
-const placeTypeWhitelist = [ 'premise', 'street_address', 'subpremise' ]; // Only cleanse these place types
+const placeTypeWhitelist = ['premise', 'street_address', 'subpremise']; // Only cleanse these place types
 
-// let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY+"&region="+REGION_BIAS;
-let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key="+API_KEY;
+let baseApiUrl = "https://maps.googleapis.com/maps/api/geocode/json?key=" + API_KEY;
 
 let requests = []; // Gets populated with AJAX requests
 let running = false;
@@ -64,14 +62,11 @@ let requestCount = 0; // Keeps track of how many requests have been sent in tota
 let qps = 0; // Current queries per second
 let startTime = null;
 
-let queryTotalRetries = 0;
-
 let input = null;
 let output = [];
 
 // Start here
 $(document).ready(function() {
-
     // Set up button listeners etc.
     setUpListeners();
 });
@@ -80,7 +75,7 @@ function setUpListeners() {
 
     for(let i = 0; i < REGION_BIAS_SELECTION.length; i++) {
         let r = REGION_BIAS_SELECTION[i];
-        let opt = $('<option value="'+r.value+'">'+r.text+'</option>');
+        let opt = $('<option value="' + r.value + '">' + r.text + '</option>');
         $('#selRegionBias').append(opt);
     }
 
@@ -130,19 +125,23 @@ function setUpListeners() {
  */
 function showFilePicker() {
     return new Promise(function(resolve, reject) {
-        dialog.showOpenDialog({
+        dialog.showOpenDialog(null, {
             title: "Select CSV File",
             promptToCreate: true,
-            properties: ['openFile'],
+            properties: [
+                'openFile',
+                'promptToCreate',
+                'dontAddToRecent'
+            ],
             filters: [
                 { name: 'CSV Files', extensions: ['csv'] },
                 { name: 'All Files', extensions: ['*'] }
             ]
-        }, function(filePaths) {
-            if(filePaths && filePaths.length === 1)
-                resolve(filePaths[0]);
-            else
+        }).then(function(result) {
+            if(result.canceled)
                 reject({ status: "OK", message: "showOpenDialog Cancelled." });
+            else if(result.filePaths && result.filePaths[0])
+                resolve(result.filePaths[0]);
         });
     });
 }
@@ -182,8 +181,15 @@ function loadFile(filePath) {
 
             // Return file data
             if(csv.data && csv.data.length > 0) {
+
                 let fileName = path.basename(filePath, path.extname(filePath));
-                let file = { name: fileName, data: csv.data, fields: csv.meta.fields };
+
+                let file = {
+                    name: fileName,
+                    path: path.dirname(filePath),
+                    data: csv.data,
+                    fields: csv.meta.fields
+                };
                 resolve(file); // Return file data
             }
             else {
@@ -200,13 +206,13 @@ function prepareRequests(file) {
     input = file;
 
     // Make sure all expected address columns exist
-    for(let i = 0; i < ADDRESS_COLUMNS.length; i++ ) {
+    for(let i = 0; i < ADDRESS_COLUMNS.length; i++) {
         if(file.fields.indexOf(ADDRESS_COLUMNS[i]) === -1)
             throw ({ status: "ERROR", message: `Column not found, Expected column: '${ADDRESS_COLUMNS[i]}'` });
     }
 
     // Make sure all expected address query columns exist
-    for(let i = 0; i < ADDRESS_QUERY_COLUMNS.length; i++ ) {
+    for(let i = 0; i < ADDRESS_QUERY_COLUMNS.length; i++) {
         if(file.fields.indexOf(ADDRESS_QUERY_COLUMNS[i]) === -1)
             throw ({ status: "ERROR", message: `Column not found, Expected column: '${ADDRESS_QUERY_COLUMNS[i]}'` });
     }
@@ -215,7 +221,7 @@ function prepareRequests(file) {
     for(let key in ADDRESS_COMPONENTS) {
         if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
             continue;
-        
+
         if(file.fields.indexOf(key) === -1)
             throw ({ status: "ERROR", message: `Column not found, Expected column: '${key}'` });
     }
@@ -245,7 +251,7 @@ function prepareRequests(file) {
         if(!address || address.trim() == "") {
             totalRequests--;
             request["skip"] = true;
-            log.warn("WARNING: Skipping address (address empty) on line " + (i+2));
+            log.warn("WARNING: Skipping address (address empty) on line " + (i + 2));
         }
         else { // Has address, proceed
 
@@ -257,7 +263,7 @@ function prepareRequests(file) {
             for(let key in ADDRESS_COMPONENTS) {
                 if(!ADDRESS_COMPONENTS.hasOwnProperty(key))
                     continue;
-                
+
                 let col = ADDRESS_COMPONENTS[key]; // Column
                 let val = row[key]; // Value
 
@@ -356,7 +362,7 @@ function start() {
                 //     if(MAX_QUERY_TOTAL_RETRIES !== 0 && queryTotalRetries >= MAX_QUERY_TOTAL_RETRIES)
                 //         break;
                 //         if(request["numRequests"] >= MAX_QUERY_RETRIES) {
-                        
+
                 //         }
                 //     }
                 //     request["numRequests"]++;
@@ -387,8 +393,10 @@ function exportFile() {
         alert("Nothing to export");
         return;
     }
-    let fileName = input.name;
-    showFileSaver(fileName).then(saveFile).then(function() {
+
+    let outputFile = path.normalize(input.path + "\\" + input.name + " (Cleansed)");
+
+    showFileSaver(outputFile).then(saveFile).then(function() {
         log("-- EXPORTED --");
     }).catch(errorHandler);
 }
@@ -397,7 +405,7 @@ function sendRequest(url, request) {
 
     // Append Region Bias to URL if populated
     if(REGION_BIAS != "")
-        url += "&region="+REGION_BIAS;
+        url += "&region=" + REGION_BIAS;
 
     $.ajax({
         url: url
@@ -433,17 +441,13 @@ function parseResponse(response, row) {
 
 function parseResults(row, results) {
 
-    // console.log("===========================");
-    // console.log(row);
-    // console.log(results);
-
     if(results.length > 0) {
 
         // Get first result (best match)
         let result = results[0];
 
         let accuracy = result["geometry"]["location_type"];
-    
+
         row["location_type"] = accuracy;
         row["types"] = result['types'].join("|");
         row["partial_match"] = result['partial_match'];
@@ -466,10 +470,10 @@ function parseResults(row, results) {
                 let component = result["address_components"].filter(function(v) { return v["types"].indexOf(type) > -1 });
                 addr[key] = component.length > 0 ? component[0][nameType].toString() : "";
             }
-    
+
             // Concatenate fields for Address1, replace multiple spaces with one space, and trim leading/trailing spaces
             let addressConcat = "";
-            
+
             if(addr['Sub Premise'] != "")
                 addressConcat += `${addr['Sub Premise']}/`;
 
@@ -506,20 +510,20 @@ function finished() {
     $('#file').removeClass('running');
 }
 
-function showFileSaver(fileName) {
+function showFileSaver(filePath) {
     return new Promise(function(resolve, reject) {
-        dialog.showSaveDialog({
+        dialog.showSaveDialog(null, {
             title: "Save File",
-            defaultPath: DEFAULT_OUTPUT_PATH + fileName,
+            defaultPath: filePath,
             filters: [
                 { name: 'CSV Files', extensions: ['csv'] },
                 { name: 'All Files', extensions: ['*'] }
             ]
-        }, function(filePath) {
-            if(!filePath || filePath == "")
+        }).then(function(result) {
+            if(result.canceled)
                 reject({ status: "OK", message: "showSaveDialog Cancelled." });
-
-            resolve(filePath);
+            else if(result.filePath)
+                resolve(result.filePath);
         });
     });
 }
@@ -538,16 +542,6 @@ function saveFile(filePath) {
     });
 }
 
-
-/**
- * Alerts the user and prints out errors to the console
- *
- * @param {Object} error - Error object
- * @param {string} error.status - The status of the error ("OK", "ERROR")
- * @param {string} error.message - The message to be alerted to the user (in a popup box)
- * @param {*} [error.details] - Any additional details of the error
- *
- */
 function errorHandler(error) {
     if(error.status && error.status === "OK") {
         // handled error
@@ -572,19 +566,19 @@ function errorHandler(error) {
 function log(str) {
     let time = formatTime(Date.now());
     let logMessage = `${time}: ${str}`;
-    let logLine = $('<p class="log-line log-info">'+logMessage+'</p>');
+    let logLine = $('<p class="log-line log-info">' + logMessage + '</p>');
     $('#log-summary').append(logLine);
     log.update();
 }
 log.warn = function(str) {
     str = str.replace("&region", "&amp;region");
-    let logLine = $('<p class="log-line log-warn">'+str+'</p>');
+    let logLine = $('<p class="log-line log-warn">' + str + '</p>');
     $('#log-warnings').append(logLine);
     log.update();
 };
 log.error = function(str) {
     str = str.replace("&region", "&amp;region");
-    let logLine = $('<p class="log-line log-err">'+str+'</p>');
+    let logLine = $('<p class="log-line log-err">' + str + '</p>');
     $('#log-errors').append(logLine);
     log.update();
 };
